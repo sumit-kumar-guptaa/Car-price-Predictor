@@ -46,6 +46,3 @@ def predict():
         return jsonify({'predicted_price': round(prediction[0], 2)})
     except Exception as e:
         return jsonify({'error': f'An error occurred during prediction: {str(e)}'}), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
