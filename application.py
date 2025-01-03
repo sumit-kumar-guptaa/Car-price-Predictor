@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pickle
 import pandas as pd
@@ -7,46 +7,45 @@ import numpy as np
 app = Flask(__name__)
 CORS(app)
 
-# Load the model and car data
-model = pickle.load(open('LinearRegressionModel.pkl', 'rb'))
-car = pd.read_csv('cleaned car.csv')
+# Load ML model and data
+try:
+    model = pickle.load(open('LinearRegressionModel.pkl', 'rb'))
+    car_data = pd.read_csv('Cleaned_Car_data.csv')
+except Exception as e:
+    model = None
+    car_data = None
+    print(f"Error loading model or data: {e}")
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    # Get unique companies, car models, years, and fuel types
-    companies = sorted(car['company'].unique())
-    car_models = sorted(car['name'].unique())
-    years = sorted(car['year'].unique(), reverse=True)
-    fuel_types = sorted(car['fuel_type'].unique())
+@app.route("/", methods=['GET'])
+def home():
+    return "Hello from backend!!!"
 
-    # Insert a placeholder option
-    companies.insert(0, 'Select Company')
-    
-    return render_template('index.html', companies=companies, car_models=car_models, years=years, fuel_types=fuel_types)
+@app.route("/check-api", methods=['GET'])
+def check():
+    return "The api is working for this endpoint"
 
+# Prediction Route
 @app.route('/predict', methods=['POST'])
 def predict():
-    # Extract form data
-    company = request.form.get('company')
-    car_model = request.form.get('car_models')
-    year = int(request.form.get('year'))  # Ensure year is an integer
-    fuel_type = request.form.get('fuel_type')
-    driven = float(request.form.get('kilo_driven'))  # Ensure driven is a float
+    if model is None:
+        return jsonify({'error': 'Model is not loaded. Please check server setup.'}), 500
 
-    # Create a DataFrame for prediction
-    input_data = pd.DataFrame({
-        'name': [car_model],
-        'company': [company],
-        'year': [year],
-        'kms_driven': [driven],
-        'fuel_type': [fuel_type]
-    })
+    try:
+        data = request.json
+        company = data.get('company')
+        car_model = data.get('car_model')
+        year = int(data.get('year'))
+        fuel_type = data.get('fuel_type')
+        driven = int(data.get('kms_driven'))
 
-    # Make prediction
-    prediction = model.predict(input_data)
-    print(prediction)  # Print prediction for debugging
+        if not all([company, car_model, year, fuel_type, driven]):
+            return jsonify({'error': 'All fields are required.'}), 400
 
-    return str(np.round(prediction[0], 2))
+        prediction = model.predict(pd.DataFrame(columns=['name', 'company', 'year', 'kms_driven', 'fuel_type'],
+                              data=np.array([car_model, company, year, driven, fuel_type]).reshape(1, 5)))
+        return jsonify({'predicted_price': round(prediction[0], 2)})
+    except Exception as e:
+        return jsonify({'error': f'An error occurred during prediction: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
